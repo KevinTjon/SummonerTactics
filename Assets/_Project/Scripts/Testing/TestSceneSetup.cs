@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Linq;
+using System.Collections;
 
 /// <summary>
 /// Handles the setup and testing functionality for the test scene.
@@ -63,6 +64,32 @@ public class TestSceneSetup : MonoBehaviour
         {
             cameraController = FindObjectOfType<CameraController>();
         }
+        
+        // Ensure required layers exist
+        EnsureRequiredLayers();
+    }
+    
+    /// <summary>
+    /// Ensures that all required layers exist in the project
+    /// </summary>
+    private void EnsureRequiredLayers()
+    {
+        // Check if the Champion layer exists
+        int championLayer = LayerMask.NameToLayer("Champion");
+        
+        if (championLayer == -1)
+        {
+            // Layer doesn't exist, warn the user
+            Debug.LogWarning("Champion layer not found! Please add a 'Champion' layer in the Unity Editor.");
+            Debug.LogWarning("Go to Edit > Project Settings > Tags and Layers and add 'Champion' to the Layers list.");
+        }
+        else
+        {
+            if (showDebugInfo)
+            {
+                Debug.Log("Champion layer found at index: " + championLayer);
+            }
+        }
     }
     
     private void Start()
@@ -75,6 +102,9 @@ public class TestSceneSetup : MonoBehaviour
         {
             SpawnAllChampions();
         }
+        
+        // Automatically spawn opposing champions for testing interactions
+        StartCoroutine(SpawnOpposingChampionsForTesting());
     }
     
     /// <summary>
@@ -413,5 +443,124 @@ public class TestSceneSetup : MonoBehaviour
         }
         
         Debug.Log($"Cleared {testEntities.Length + champions.Length} test entities from the scene");
+    }
+    
+    /// <summary>
+    /// Spawns opposing champions in the same lane for testing interactions
+    /// </summary>
+    private System.Collections.IEnumerator SpawnOpposingChampionsForTesting()
+    {
+        // Wait a bit to ensure everything is set up
+        yield return new WaitForSeconds(1f);
+        
+        // Make sure lanes are set up
+        if (laneManager == null)
+        {
+            Debug.LogWarning("LaneManager not found! Cannot spawn opposing champions.");
+            yield break;
+        }
+        
+        // Check if mid lane exists
+        if (laneManager.midLane == null)
+        {
+            Debug.LogWarning("Mid lane not found! Cannot spawn opposing champions.");
+            yield break;
+        }
+        
+        // Spawn a blue team champion in mid lane
+        GameObject blueChampion = SpawnChampion(Team.Blue, LaneType.Mid);
+        if (blueChampion != null)
+        {
+            Debug.Log("Spawned Blue team champion in Mid lane for interaction testing");
+        }
+        
+        // Wait a bit before spawning the red champion
+        yield return new WaitForSeconds(0.5f);
+        
+        // Spawn a red team champion in mid lane
+        GameObject redChampion = SpawnChampion(Team.Red, LaneType.Mid);
+        if (redChampion != null)
+        {
+            Debug.Log("Spawned Red team champion in Mid lane for interaction testing");
+        }
+        
+        Debug.Log("Champions spawned for interaction testing. They should meet in the middle of the lane.");
+    }
+    
+    /// <summary>
+    /// Spawns a champion with the specified team and lane type
+    /// </summary>
+    private GameObject SpawnChampion(Team team, LaneType laneType)
+    {
+        if (testEntityPrefab == null)
+        {
+            Debug.LogWarning("Test entity prefab not assigned! Cannot spawn champion.");
+            return null;
+        }
+        
+        // Determine spawn position based on team
+        Vector3 spawnPosition;
+        if (team == Team.Blue && blueSpawnPoint != null)
+        {
+            spawnPosition = blueSpawnPoint.position;
+        }
+        else if (team == Team.Red && redSpawnPoint != null)
+        {
+            spawnPosition = redSpawnPoint.position;
+        }
+        else
+        {
+            // Fallback to a default position
+            spawnPosition = new Vector3(team == Team.Blue ? -5 : 5, 0, 0);
+        }
+        
+        // Spawn the champion
+        GameObject championObj = Instantiate(testEntityPrefab, spawnPosition, Quaternion.identity);
+        championObj.name = $"{team} Champion ({laneType})";
+        
+        // Set up the champion
+        Champion champion = championObj.GetComponent<Champion>();
+        if (champion != null)
+        {
+            champion.team = team;
+            champion.assignedLaneType = laneType;
+            champion.championName = $"{team} Champion";
+            
+            // Set team color
+            if (team == Team.Blue)
+            {
+                champion.teamColor = blueTeamColors[0];
+            }
+            else
+            {
+                champion.teamColor = redTeamColors[0];
+            }
+            
+            // Make sure the champion has a collider for detection
+            if (championObj.GetComponent<Collider2D>() == null)
+            {
+                CircleCollider2D collider = championObj.AddComponent<CircleCollider2D>();
+                collider.radius = 1.5f;
+                collider.isTrigger = true;
+                Debug.Log($"Added CircleCollider2D to {championObj.name}");
+            }
+            
+            // Set the champion's layer to "Champion"
+            int championLayer = LayerMask.NameToLayer("Champion");
+            if (championLayer != -1)
+            {
+                championObj.layer = championLayer;
+                Debug.Log($"Set {championObj.name} to layer 'Champion'");
+            }
+            else
+            {
+                Debug.LogWarning("Champion layer not found! Please add a 'Champion' layer in the Unity Editor.");
+            }
+            
+            // Assign to lane
+            champion.AssignToLane();
+        }
+        
+        return championObj;
     }
 } 

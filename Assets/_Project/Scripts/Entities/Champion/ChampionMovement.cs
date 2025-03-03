@@ -1,4 +1,5 @@
 using UnityEngine;
+using System.Collections.Generic;
 
 /// <summary>
 /// Handles movement for champions along lanes.
@@ -22,6 +23,16 @@ public class ChampionMovement : MonoBehaviour
     [Tooltip("Whether to move forward along the lane (true for Blue team, false for Red team)")]
     public bool moveForward = true;
     
+    [Header("Interaction Settings")]
+    [Tooltip("Distance at which champions detect each other")]
+    public float championDetectionRange = 3f;
+    
+    [Tooltip("Whether this champion is currently engaged with an opponent")]
+    public bool isEngagedWithOpponent = false;
+    
+    [Tooltip("The current opponent this champion is engaged with")]
+    public Champion currentOpponent;
+    
     [Header("Debug")]
     [Tooltip("Whether to show debug information")]
     public bool showDebug = true;
@@ -35,10 +46,16 @@ public class ChampionMovement : MonoBehaviour
     // Reference to the champion component
     private Champion championComponent;
     
+    // Layer mask for detecting champions
+    private LayerMask championLayerMask;
+    
     private void Awake()
     {
         // Get the champion component
         championComponent = GetComponent<Champion>();
+        
+        // Set up layer mask for champion detection
+        championLayerMask = LayerMask.GetMask("Champion");
     }
     
     private void Start()
@@ -98,8 +115,34 @@ public class ChampionMovement : MonoBehaviour
     {
         if (assignedLane == null || reachedEndOfLane)
             return;
+        
+        // Check for opponent champions before moving
+        if (!isEngagedWithOpponent)
+        {
+            DetectOpponentChampions();
+        }
+        else
+        {
+            // If engaged with an opponent, face them
+            if (currentOpponent != null)
+            {
+                FaceOpponent(currentOpponent.transform.position);
+            }
+            else
+            {
+                // If opponent is no longer valid, disengage
+                isEngagedWithOpponent = false;
+            }
             
-        MoveAlongLane();
+            // Don't move while engaged
+            return;
+        }
+        
+        // Only move if not engaged with an opponent
+        if (!isEngagedWithOpponent)
+        {
+            MoveAlongLane();
+        }
     }
     
     /// <summary>
@@ -141,6 +184,91 @@ public class ChampionMovement : MonoBehaviour
         {
             assignedLane = closestLane;
             Debug.Log($"Champion {gameObject.name} assigned to lane {assignedLane.laneName}");
+        }
+    }
+    
+    /// <summary>
+    /// Detects opponent champions in the same lane
+    /// </summary>
+    private void DetectOpponentChampions()
+    {
+        // Find all champions in detection range
+        Collider2D[] colliders = Physics2D.OverlapCircleAll(transform.position, championDetectionRange, championLayerMask);
+        
+        foreach (Collider2D collider in colliders)
+        {
+            // Skip self
+            if (collider.gameObject == gameObject)
+                continue;
+                
+            // Get the champion component
+            Champion otherChampion = collider.GetComponent<Champion>();
+            if (otherChampion == null)
+                continue;
+                
+            // Check if this is an opponent (different team)
+            if (otherChampion.team != championComponent.team)
+            {
+                // Check if they're in the same lane
+                ChampionMovement otherMovement = otherChampion.GetComponent<ChampionMovement>();
+                if (otherMovement != null && otherMovement.assignedLane == assignedLane)
+                {
+                    // Engage with this opponent
+                    EngageWithOpponent(otherChampion);
+                    
+                    // Also make the opponent engage with us
+                    otherMovement.EngageWithOpponent(championComponent);
+                    
+                    if (showDebug)
+                    {
+                        Debug.Log($"Champion {championComponent.championName} engaged with opponent {otherChampion.championName} in lane {assignedLane.laneName}");
+                    }
+                    
+                    break;
+                }
+            }
+        }
+    }
+    
+    /// <summary>
+    /// Engages with an opponent champion
+    /// </summary>
+    public void EngageWithOpponent(Champion opponent)
+    {
+        isEngagedWithOpponent = true;
+        currentOpponent = opponent;
+        
+        // Face the opponent
+        FaceOpponent(opponent.transform.position);
+    }
+    
+    /// <summary>
+    /// Disengages from the current opponent
+    /// </summary>
+    public void DisengageFromOpponent()
+    {
+        isEngagedWithOpponent = false;
+        currentOpponent = null;
+        
+        if (showDebug)
+        {
+            Debug.Log($"Champion {championComponent.championName} disengaged from opponent");
+        }
+    }
+    
+    /// <summary>
+    /// Makes the champion face the opponent
+    /// </summary>
+    private void FaceOpponent(Vector3 opponentPosition)
+    {
+        // Calculate direction to opponent
+        Vector3 direction = (opponentPosition - transform.position).normalized;
+        
+        if (direction != Vector3.zero)
+        {
+            // Calculate angle to face opponent
+            float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
+            transform.rotation = Quaternion.Euler(0, 0, angle - 90); // -90 to face forward
         }
     }
     
@@ -280,5 +408,12 @@ public class ChampionMovement : MonoBehaviour
     public void ResumeMovement()
     {
         reachedEndOfLane = false;
+    }
+    
+    private void OnDrawGizmosSelected()
+    {
+        // Draw detection range
+        Gizmos.color = Color.yellow;
+        Gizmos.DrawWireSphere(transform.position, championDetectionRange);
     }
 } 

@@ -23,6 +23,9 @@ public class TestUI : MonoBehaviour
     [Tooltip("Button to stop movement")]
     public Button stopMovementButton;
     
+    [Tooltip("Button to disengage all champions")]
+    public Button disengageButton;
+    
     [Tooltip("Dropdown to select lane type")]
     public Dropdown laneTypeDropdown;
     
@@ -67,6 +70,11 @@ public class TestUI : MonoBehaviour
         if (stopMovementButton != null)
         {
             stopMovementButton.onClick.AddListener(StopMovement);
+        }
+        
+        if (disengageButton != null)
+        {
+            disengageButton.onClick.AddListener(DisengageAllChampions);
         }
     }
     
@@ -199,5 +207,20 @@ public class TestUI : MonoBehaviour
         }
         
         Debug.Log($"Set up {testEntities.Length} test entities with lane type {selectedLaneType} and team {selectedTeam}");
+    }
+    
+    /// <summary>
+    /// Disengages all champions from their opponents
+    /// </summary>
+    public void DisengageAllChampions()
+    {
+        ChampionMovement[] champions = FindObjectsOfType<ChampionMovement>();
+        
+        foreach (ChampionMovement champion in champions)
+        {
+            champion.DisengageFromOpponent();
+        }
+        
+        Debug.Log($"Disengaged {champions.Length} champions from their opponents");
     }
 } 

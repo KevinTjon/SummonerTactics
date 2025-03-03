@@ -26,6 +26,13 @@ public class Champion : MonoBehaviour
     [Tooltip("Whether to show debug information")]
     public bool showDebug = true;
     
+    [Header("Interaction Settings")]
+    [Tooltip("Visual indicator for when champion is engaged with an opponent")]
+    public GameObject engagementIndicator;
+    
+    [Tooltip("Color for the engagement indicator")]
+    public Color engagementColor = Color.yellow;
+    
     private ChampionMovement movementComponent;
     private bool laneAssigned = false;
     
@@ -41,6 +48,12 @@ public class Champion : MonoBehaviour
         
         // Set initial color based on team
         UpdateTeamColor();
+        
+        // Set layer to "Champion" for detection
+        SetChampionLayer();
+        
+        // Create engagement indicator if it doesn't exist
+        CreateEngagementIndicator();
     }
     
     private void Start()
@@ -49,6 +62,37 @@ public class Champion : MonoBehaviour
         if (!laneAssigned && assignedLaneType != LaneType.None)
         {
             AssignToLane();
+        }
+    }
+    
+    private void Update()
+    {
+        // Update engagement indicator visibility
+        UpdateEngagementIndicator();
+    }
+    
+    /// <summary>
+    /// Sets the gameObject layer to "Champion" for detection
+    /// </summary>
+    private void SetChampionLayer()
+    {
+        // Check if the Champion layer exists
+        int championLayer = LayerMask.NameToLayer("Champion");
+        
+        if (championLayer != -1)
+        {
+            // Set the layer
+            gameObject.layer = championLayer;
+            
+            if (showDebug)
+            {
+                Debug.Log($"Set champion {championName} to layer 'Champion'");
+            }
+        }
+        else
+        {
+            // Layer doesn't exist, warn the user
+            Debug.LogWarning("Champion layer not found! Please add a 'Champion' layer in the Unity Editor.");
         }
     }
     
@@ -184,6 +228,87 @@ public class Champion : MonoBehaviour
     {
         assignedLaneType = laneType;
         AssignToLane();
+    }
+    
+    /// <summary>
+    /// Creates a visual indicator for engagement
+    /// </summary>
+    private void CreateEngagementIndicator()
+    {
+        if (engagementIndicator == null)
+        {
+            // Create a new game object for the indicator
+            engagementIndicator = new GameObject("EngagementIndicator");
+            engagementIndicator.transform.SetParent(transform);
+            engagementIndicator.transform.localPosition = Vector3.zero;
+            
+            // Add a sprite renderer
+            SpriteRenderer indicatorRenderer = engagementIndicator.AddComponent<SpriteRenderer>();
+            
+            // Create a simple circle sprite
+            indicatorRenderer.sprite = CreateCircleSprite();
+            indicatorRenderer.color = engagementColor;
+            indicatorRenderer.sortingOrder = -1; // Behind the champion
+            
+            // Scale it appropriately
+            engagementIndicator.transform.localScale = new Vector3(1.5f, 1.5f, 1.5f);
+            
+            // Initially hide it
+            engagementIndicator.SetActive(false);
+        }
+    }
+    
+    /// <summary>
+    /// Updates the visibility of the engagement indicator
+    /// </summary>
+    private void UpdateEngagementIndicator()
+    {
+        if (engagementIndicator != null)
+        {
+            ChampionMovement movement = GetComponent<ChampionMovement>();
+            if (movement != null)
+            {
+                // Show indicator when engaged with an opponent
+                engagementIndicator.SetActive(movement.isEngagedWithOpponent);
+            }
+        }
+    }
+    
+    /// <summary>
+    /// Creates a simple circle sprite for the engagement indicator
+    /// </summary>
+    private Sprite CreateCircleSprite()
+    {
+        // Create a simple circle texture
+        int resolution = 64;
+        Texture2D texture = new Texture2D(resolution, resolution);
+        
+        // Set pixels to create a circle
+        float radius = resolution / 2f;
+        for (int x = 0; x < resolution; x++)
+        {
+            for (int y = 0; y < resolution; y++)
+            {
+                float distance = Vector2.Distance(new Vector2(x, y), new Vector2(radius, radius));
+                if (distance < radius - 2) // Solid circle
+                {
+                    texture.SetPixel(x, y, Color.white);
+                }
+                else if (distance < radius) // Border
+                {
+                    texture.SetPixel(x, y, Color.white);
+                }
+                else
+                {
+                    texture.SetPixel(x, y, Color.clear);
+                }
+            }
+        }
+        
+        texture.Apply();
+        
+        // Create sprite from texture
+        return Sprite.Create(texture, new Rect(0, 0, resolution, resolution), new Vector2(0.5f, 0.5f));
     }
 }
 

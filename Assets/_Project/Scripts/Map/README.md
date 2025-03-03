@@ -32,6 +32,8 @@ The `Champion` class represents a champion in the game. It includes:
 - Team and lane type assignment
 - Methods for assigning the champion to a lane
 - Team color visualization
+- Visual indicators for champion interactions
+- Layer assignment for champion detection
 
 ### ChampionMovement
 
@@ -40,6 +42,31 @@ The `ChampionMovement` class controls how champions move along lanes. It include
 - Movement speed and waypoint threshold settings
 - Lane assignment and direction control
 - Methods for finding the closest lane and positioning at lane start
+- Champion interaction detection and handling
+- Methods for engaging with and disengaging from opponents
+
+## Champion Interactions
+
+The Lane System now includes champion interaction features:
+
+### Detection
+
+- Champions detect opposing champions within a configurable range
+- Detection only occurs between champions of different teams in the same lane
+- Uses Unity's Physics2D system with the "Champion" layer for efficient detection
+
+### Engagement
+
+- When champions detect an opponent, they stop moving and face each other
+- Both champions enter an "engaged" state
+- Visual indicators appear to show engagement status
+- Champions remain engaged until manually disengaged
+
+### Disengagement
+
+- Champions can be disengaged using the `DisengageFromOpponent` method
+- The TestUI includes a button to disengage all champions for testing
+- When disengaged, champions resume normal movement along their lanes
 
 ## Editor Tools
 
@@ -101,6 +128,13 @@ The `ChampionMovementEditor` provides a custom inspector for the `ChampionMoveme
 1. Add a `ChampionMovement` component to your champion GameObject
 2. Set the movement properties like speed and waypoint threshold
 3. The champion will automatically move along the assigned lane
+
+### Testing Champion Interactions
+
+1. Ensure the "Champion" layer exists in your Unity project (Edit > Project Settings > Tags and Layers)
+2. Spawn champions from different teams in the same lane
+3. Wait for them to detect each other and engage
+4. Use the "Disengage All Champions" button in the TestUI to disengage them
 
 ## Debugging
 

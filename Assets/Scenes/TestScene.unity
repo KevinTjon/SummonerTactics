@@ -133,6 +133,7 @@ GameObject:
   - component: {fileID: 958032090}
   - component: {fileID: 958032089}
   - component: {fileID: 958032088}
+  - component: {fileID: 958032091}
   m_Layer: 0
   m_Name: Main Camera
   m_TagString: MainCamera
@@ -183,7 +184,7 @@ Camera:
   far clip plane: 1000
   field of view: 60
   orthographic: 1
-  orthographic size: 5
+  orthographic size: 50
   m_Depth: -1
   m_CullingMask:
     serializedVersion: 2
@@ -214,8 +215,92 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &958032091
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 958032087}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 09b00feb48e135c48ad275c4fa3ec5d4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  targetCamera: {fileID: 958032089}
+  mapObject: {fileID: 0}
+  zoomSpeed: 5
+  minZoom: 5
+  maxZoom: 30
+  defaultHeight: 40
+  nearClipPlane: 0.1
+  farClipPlane: 1000
+  defaultMapCenter: {x: 0, y: 0, z: 0}
+  defaultMapWidth: 100
+  defaultMapHeight: 100
+--- !u!1 &2033212834
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2033212836}
+  - component: {fileID: 2033212835}
+  m_Layer: 0
+  m_Name: TestScene
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &2033212835
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2033212834}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 015df654eacfe6d4bad2a8bd93744107, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  mapPrefab: {fileID: 606828608959364371, guid: 15056822bca110e43933a40aa2884797, type: 3}
+  cameraController: {fileID: 958032091}
+  spawnTestEntitiesAtStart: 1
+  testEntityPrefab: {fileID: 382617277477844352, guid: 0e8c089fb20d4de4896165f39b439daa, type: 3}
+  setupLanesAutomatically: 1
+  laneManagerPrefab: {fileID: 2928881643907640045, guid: 10cf948d27568174b9ae9bbbada7f998, type: 3}
+  championsPerTeam: 3
+  blueTeamColors:
+  - {r: 0, g: 0, b: 1, a: 1}
+  - {r: 0, g: 0.5, b: 1, a: 1}
+  - {r: 0, g: 0.2, b: 0.8, a: 1}
+  redTeamColors:
+  - {r: 1, g: 0, b: 0, a: 1}
+  - {r: 1, g: 0.5, b: 0, a: 1}
+  - {r: 0.8, g: 0, b: 0.2, a: 1}
+  showDebugInfo: 1
+--- !u!4 &2033212836
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2033212834}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -62.950157, y: 19.88515, z: 10.191375}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
   m_Roots:
   - {fileID: 958032090}
+  - {fileID: 2033212836}
