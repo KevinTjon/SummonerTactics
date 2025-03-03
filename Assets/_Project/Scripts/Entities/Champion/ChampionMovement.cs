@@ -559,37 +559,11 @@ public class ChampionMovement : MonoBehaviour
         if (currentOpponent == null)
             return;
             
-        // Create a simple effect if no prefab is assigned
-        if (attackEffectPrefab == null)
+        try
         {
-            // Create a simple circle for the attack effect
-            GameObject effectObj = new GameObject("AttackEffect");
+            // Create a programmatic attack effect prefab with specified size
+            GameObject effectObj = CreateAttackEffectPrefab(0.5f);
             effectObj.transform.position = transform.position;
-            
-            // Add sprite renderer
-            SpriteRenderer renderer = effectObj.AddComponent<SpriteRenderer>();
-            renderer.sprite = CreateCircleSprite(16, Color.yellow);
-            renderer.sortingOrder = 5;
-            
-            // Add attack effect component
-            AttackEffect effect = effectObj.AddComponent<AttackEffect>();
-            effect.targetPosition = currentOpponent.transform.position;
-            effect.duration = 0.3f;
-            effect.effectColor = Color.yellow;
-            
-            // Set team color if champion component exists
-            if (championComponent != null)
-            {
-                effect.SetColor(championComponent.teamColor);
-            }
-            
-            // Set scale
-            effectObj.transform.localScale = new Vector3(0.3f, 0.3f, 0.3f);
-        }
-        else
-        {
-            // Instantiate attack effect from prefab
-            GameObject effectObj = Instantiate(attackEffectPrefab, transform.position, Quaternion.identity);
             
             // Set up the effect
             AttackEffect effect = effectObj.GetComponent<AttackEffect>();
@@ -603,58 +577,66 @@ public class ChampionMovement : MonoBehaviour
                     effect.SetColor(championComponent.teamColor);
                 }
             }
-            else
-            {
-                // If the prefab doesn't have the AttackEffect component, add it
-                effect = effectObj.AddComponent<AttackEffect>();
-                effect.SetTarget(currentOpponent.transform.position);
-                
-                // Set team color if champion component exists
-                if (championComponent != null)
-                {
-                    effect.SetColor(championComponent.teamColor);
-                }
-                
-                Debug.LogWarning("Attack effect prefab doesn't have AttackEffect component. Adding one automatically.");
-            }
         }
-        
-        if (showDebug)
+        catch (System.Exception e)
         {
-            Debug.Log($"Champion {championComponent.championName} attacked {currentOpponent.championName}");
+            Debug.LogError($"Error in ShowAttackEffect: {e.Message}");
         }
     }
     
     /// <summary>
-    /// Creates a simple circle sprite for the attack effect
+    /// Creates a new attack effect prefab programmatically
     /// </summary>
-    private Sprite CreateCircleSprite(int resolution, Color color)
+    public static GameObject CreateAttackEffectPrefab(float size = 0.5f)
     {
-        // Create a simple circle texture
-        Texture2D texture = new Texture2D(resolution, resolution);
+        // Create a new game object for the attack effect
+        GameObject attackEffectObj = new GameObject("AttackEffect");
         
-        // Set pixels to create a circle
-        float radius = resolution / 2f;
-        for (int x = 0; x < resolution; x++)
+        // Add a sprite renderer
+        SpriteRenderer renderer = attackEffectObj.AddComponent<SpriteRenderer>();
+        
+        // Create a circle sprite
+        Texture2D circleTexture = new Texture2D(128, 128);
+        Color[] colors = new Color[128 * 128];
+        
+        for (int y = 0; y < 128; y++)
         {
-            for (int y = 0; y < resolution; y++)
+            for (int x = 0; x < 128; x++)
             {
-                float distance = Vector2.Distance(new Vector2(x, y), new Vector2(radius, radius));
-                if (distance < radius)
+                float distanceFromCenter = Mathf.Sqrt(Mathf.Pow(x - 64, 2) + Mathf.Pow(y - 64, 2));
+                if (distanceFromCenter <= 64)
                 {
-                    texture.SetPixel(x, y, color);
+                    colors[y * 128 + x] = Color.white;
                 }
                 else
                 {
-                    texture.SetPixel(x, y, Color.clear);
+                    colors[y * 128 + x] = Color.clear;
                 }
             }
         }
         
-        texture.Apply();
+        circleTexture.SetPixels(colors);
+        circleTexture.Apply();
         
-        // Create sprite from texture
-        return Sprite.Create(texture, new Rect(0, 0, resolution, resolution), new Vector2(0.5f, 0.5f));
+        // Create a sprite from the texture
+        Sprite circleSprite = Sprite.Create(circleTexture, new Rect(0, 0, 128, 128), new Vector2(0.5f, 0.5f));
+        
+        // Assign the sprite to the renderer
+        renderer.sprite = circleSprite;
+        renderer.sortingOrder = 15;
+        
+        // Add the AttackEffect component
+        AttackEffect attackEffect = attackEffectObj.AddComponent<AttackEffect>();
+        attackEffect.duration = 0.5f;
+        attackEffect.speed = 10f;
+        attackEffect.destroyOnReachTarget = true;
+        attackEffect.scaleDownOnApproach = true;
+        attackEffect.pulseEffect = true;
+        
+        // Set the scale based on the size parameter
+        attackEffectObj.transform.localScale = new Vector3(size, size, size);
+        
+        return attackEffectObj;
     }
     
     private void OnDrawGizmosSelected()
