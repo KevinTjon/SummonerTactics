@@ -97,14 +97,25 @@ public class TestSceneSetup : MonoBehaviour
         // Set up the test scene
         SetupTestScene();
         
+        // Create attack effect prefab
+        CreateAttackEffectPrefab();
+        
         // Spawn test entities if enabled
         if (spawnTestEntitiesAtStart)
         {
             SpawnAllChampions();
+            
+            // Don't run the opposing champions test if we're already spawning all champions
+            // This prevents duplicate champions
+        }
+        else
+        {
+            // Only spawn opposing champions for testing if we're not spawning all champions
+            StartCoroutine(SpawnOpposingChampionsForTesting());
         }
         
-        // Automatically spawn opposing champions for testing interactions
-        StartCoroutine(SpawnOpposingChampionsForTesting());
+        // Test health bar functionality
+        StartCoroutine(TestHealthBarFunctionality());
     }
     
     /// <summary>
@@ -446,7 +457,8 @@ public class TestSceneSetup : MonoBehaviour
     }
     
     /// <summary>
-    /// Spawns opposing champions in the same lane for testing interactions
+    /// Spawns opposing champions in the same lane for testing interactions.
+    /// This is used only when spawnTestEntitiesAtStart is false.
     /// </summary>
     private System.Collections.IEnumerator SpawnOpposingChampionsForTesting()
     {
@@ -466,6 +478,8 @@ public class TestSceneSetup : MonoBehaviour
             Debug.LogWarning("Mid lane not found! Cannot spawn opposing champions.");
             yield break;
         }
+        
+        Debug.Log("Spawning minimal set of champions for interaction testing...");
         
         // Spawn a blue team champion in mid lane
         GameObject blueChampion = SpawnChampion(Team.Blue, LaneType.Mid);
@@ -559,8 +573,155 @@ public class TestSceneSetup : MonoBehaviour
             
             // Assign to lane
             champion.AssignToLane();
+            
+            // Set up attack effect
+            ChampionMovement movement = championObj.GetComponent<ChampionMovement>();
+            if (movement != null)
+            {
+                // Try to load the attack effect prefab
+                movement.attackEffectPrefab = Resources.Load<GameObject>("Prefabs/AttackEffect");
+                
+                if (movement.attackEffectPrefab != null)
+                {
+                    Debug.Log($"Assigned attack effect prefab to {championObj.name}");
+                }
+            }
         }
         
         return championObj;
+    }
+    
+    /// <summary>
+    /// Tests health bar functionality by applying damage to champions
+    /// </summary>
+    private System.Collections.IEnumerator TestHealthBarFunctionality()
+    {
+        // Wait for champions to be spawned
+        yield return new WaitForSeconds(3f);
+        
+        // Find all champions in the scene
+        Champion[] champions = FindObjectsOfType<Champion>();
+        
+        if (champions.Length == 0)
+        {
+            Debug.LogWarning("No champions found for health bar testing!");
+            yield break;
+        }
+        
+        // Log the test
+        Debug.Log("Testing health bar functionality...");
+        
+        // Apply damage to each champion
+        foreach (Champion champion in champions)
+        {
+            // Apply 20% damage
+            float damageAmount = champion.maxHealth * 0.2f;
+            champion.TakeDamage(damageAmount);
+            
+            Debug.Log($"Applied {damageAmount} damage to {champion.championName}. Current health: {champion.currentHealth}/{champion.maxHealth}");
+            
+            // Wait a bit
+            yield return new WaitForSeconds(0.5f);
+        }
+        
+        // Wait a bit
+        yield return new WaitForSeconds(2f);
+        
+        // Heal the champions
+        foreach (Champion champion in champions)
+        {
+            // Heal 10%
+            float healAmount = champion.maxHealth * 0.1f;
+            champion.Heal(healAmount);
+            
+            Debug.Log($"Healed {champion.championName} for {healAmount}. Current health: {champion.currentHealth}/{champion.maxHealth}");
+            
+            // Wait a bit
+            yield return new WaitForSeconds(0.5f);
+        }
+        
+        Debug.Log("Health bar testing complete!");
+    }
+    
+    /// <summary>
+    /// Creates an attack effect prefab for champions to use
+    /// </summary>
+    private void CreateAttackEffectPrefab()
+    {
+        // Check if we already have a prefab in Resources
+        GameObject existingPrefab = Resources.Load<GameObject>("Prefabs/AttackEffect");
+        if (existingPrefab != null)
+        {
+            Debug.Log("Attack effect prefab already exists in Resources.");
+            return;
+        }
+        
+        // Create a new game object for the attack effect
+        GameObject attackEffectObj = new GameObject("AttackEffect");
+        
+        // Add sprite renderer
+        SpriteRenderer renderer = attackEffectObj.AddComponent<SpriteRenderer>();
+        
+        // Create a simple sprite
+        Texture2D texture = new Texture2D(32, 32);
+        Color[] colors = new Color[32 * 32];
+        
+        // Create a simple projectile shape
+        for (int x = 0; x < 32; x++)
+        {
+            for (int y = 0; y < 32; y++)
+            {
+                float distanceFromCenter = Vector2.Distance(new Vector2(x, y), new Vector2(16, 16));
+                if (distanceFromCenter < 8)
+                {
+                    // Core of the projectile
+                    colors[y * 32 + x] = new Color(1f, 0.8f, 0.2f, 1f);
+                }
+                else if (distanceFromCenter < 12)
+                {
+                    // Outer glow
+                    float alpha = 1f - ((distanceFromCenter - 8) / 4f);
+                    colors[y * 32 + x] = new Color(1f, 0.6f, 0.1f, alpha);
+                }
+                else
+                {
+                    // Transparent
+                    colors[y * 32 + x] = Color.clear;
+                }
+            }
+        }
+        
+        texture.SetPixels(colors);
+        texture.Apply();
+        
+        // Create sprite from texture
+        Sprite sprite = Sprite.Create(texture, new Rect(0, 0, 32, 32), new Vector2(0.5f, 0.5f));
+        renderer.sprite = sprite;
+        
+        // Add attack effect component
+        AttackEffect effect = attackEffectObj.AddComponent<AttackEffect>();
+        effect.duration = 0.5f;
+        effect.speed = 8f;
+        effect.pulseEffect = true;
+        effect.pulseFrequency = 15f;
+        effect.pulseAmplitude = 0.15f;
+        
+        // Set scale
+        attackEffectObj.transform.localScale = new Vector3(0.5f, 0.5f, 0.5f);
+        
+        // Create a prefab from this game object
+        #if UNITY_EDITOR
+        // This code only works in the editor
+        if (!System.IO.Directory.Exists("Assets/Resources/Prefabs"))
+        {
+            System.IO.Directory.CreateDirectory("Assets/Resources/Prefabs");
+        }
+        
+        UnityEditor.PrefabUtility.SaveAsPrefabAsset(attackEffectObj, "Assets/Resources/Prefabs/AttackEffect.prefab");
+        Debug.Log("Created attack effect prefab at Assets/Resources/Prefabs/AttackEffect.prefab");
+        #endif
+        
+        // Destroy the temporary object
+        Destroy(attackEffectObj);
     }
 } 

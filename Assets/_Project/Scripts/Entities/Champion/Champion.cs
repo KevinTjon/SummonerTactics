@@ -15,6 +15,16 @@ public class Champion : MonoBehaviour
     [Tooltip("The lane this champion is assigned to")]
     public LaneType assignedLaneType = LaneType.None;
     
+    [Header("Health Settings")]
+    [Tooltip("Maximum health of the champion")]
+    public float maxHealth = 100f;
+    
+    [Tooltip("Current health of the champion")]
+    public float currentHealth;
+    
+    [Tooltip("Whether the champion is alive")]
+    public bool isAlive = true;
+    
     [Header("Visual Settings")]
     [Tooltip("The color to use for this champion's team")]
     public Color teamColor = Color.blue;
@@ -33,8 +43,26 @@ public class Champion : MonoBehaviour
     [Tooltip("Color for the engagement indicator")]
     public Color engagementColor = Color.yellow;
     
+    [Header("Health Bar Settings")]
+    [Tooltip("Prefab for the health bar")]
+    public GameObject healthBarPrefab;
+    
+    [Tooltip("Offset for the health bar position")]
+    public Vector3 healthBarOffset = new Vector3(0, 1.5f, 0);
+    
+    [Tooltip("Health bar background color")]
+    public Color healthBarBackgroundColor = new Color(0.2f, 0.2f, 0.2f, 0.8f);
+    
+    [Tooltip("Health bar fill color")]
+    public Color healthBarFillColor = Color.green;
+    
+    [Tooltip("Health bar low health color (when health is below 30%)")]
+    public Color healthBarLowHealthColor = Color.red;
+    
     private ChampionMovement movementComponent;
     private bool laneAssigned = false;
+    private GameObject healthBarInstance;
+    private Transform healthBarFill;
     
     private void Awake()
     {
@@ -52,8 +80,17 @@ public class Champion : MonoBehaviour
         // Set layer to "Champion" for detection
         SetChampionLayer();
         
+        // Ensure champion has a collider for collision detection
+        EnsureCollider();
+        
         // Create engagement indicator if it doesn't exist
         CreateEngagementIndicator();
+        
+        // Initialize health
+        currentHealth = maxHealth;
+        
+        // Create health bar
+        CreateHealthBar();
     }
     
     private void Start()
@@ -69,6 +106,9 @@ public class Champion : MonoBehaviour
     {
         // Update engagement indicator visibility
         UpdateEngagementIndicator();
+        
+        // Update health bar
+        UpdateHealthBar();
     }
     
     /// <summary>
@@ -309,6 +349,323 @@ public class Champion : MonoBehaviour
         
         // Create sprite from texture
         return Sprite.Create(texture, new Rect(0, 0, resolution, resolution), new Vector2(0.5f, 0.5f));
+    }
+    
+    /// <summary>
+    /// Creates a health bar for the champion
+    /// </summary>
+    private void CreateHealthBar()
+    {
+        // If we already have a health bar, don't create another one
+        if (healthBarInstance != null)
+            return;
+            
+        // Create a new health bar
+        if (healthBarPrefab != null)
+        {
+            // Instantiate from prefab
+            healthBarInstance = Instantiate(healthBarPrefab, transform);
+        }
+        else
+        {
+            // Create a simple health bar
+            healthBarInstance = new GameObject("HealthBar");
+            healthBarInstance.transform.SetParent(transform);
+            
+            // Create background
+            GameObject background = new GameObject("Background");
+            background.transform.SetParent(healthBarInstance.transform);
+            SpriteRenderer bgRenderer = background.AddComponent<SpriteRenderer>();
+            bgRenderer.sprite = CreateRectSprite();
+            bgRenderer.color = healthBarBackgroundColor;
+            bgRenderer.sortingOrder = 10;
+            
+            // Create fill
+            GameObject fill = new GameObject("Fill");
+            fill.transform.SetParent(healthBarInstance.transform);
+            SpriteRenderer fillRenderer = fill.AddComponent<SpriteRenderer>();
+            fillRenderer.sprite = CreateRectSprite();
+            fillRenderer.color = healthBarFillColor;
+            fillRenderer.sortingOrder = 11;
+            
+            // Store reference to fill transform
+            healthBarFill = fill.transform;
+            
+            // Set up transforms
+            background.transform.localScale = new Vector3(1, 0.2f, 1);
+            fill.transform.localScale = new Vector3(1, 0.2f, 1);
+            
+            // Position the fill at the left edge of the background
+            fill.transform.localPosition = new Vector3(-0.5f, 0, 0);
+            
+            // Set the pivot of the fill to the left
+            fill.transform.localPosition = new Vector3(-0.5f, 0, 0);
+        }
+        
+        // Position the health bar above the champion
+        healthBarInstance.transform.localPosition = healthBarOffset;
+        
+        // Make sure the health bar is visible
+        healthBarInstance.SetActive(true);
+    }
+    
+    /// <summary>
+    /// Updates the health bar based on current health
+    /// </summary>
+    private void UpdateHealthBar()
+    {
+        if (healthBarInstance == null || healthBarFill == null)
+            return;
+            
+        // Calculate health percentage
+        float healthPercent = Mathf.Clamp01(currentHealth / maxHealth);
+        
+        // Update fill scale
+        healthBarFill.localScale = new Vector3(healthPercent, healthBarFill.localScale.y, 1);
+        
+        // Update fill color based on health percentage
+        SpriteRenderer fillRenderer = healthBarFill.GetComponent<SpriteRenderer>();
+        if (fillRenderer != null)
+        {
+            if (healthPercent < 0.3f)
+            {
+                fillRenderer.color = healthBarLowHealthColor;
+            }
+            else
+            {
+                fillRenderer.color = healthBarFillColor;
+            }
+        }
+        
+        // Hide health bar if champion is dead
+        healthBarInstance.SetActive(isAlive);
+    }
+    
+    /// <summary>
+    /// Creates a simple rectangular sprite for the health bar
+    /// </summary>
+    private Sprite CreateRectSprite()
+    {
+        // Create a simple rectangle texture
+        int width = 100;
+        int height = 20;
+        Texture2D texture = new Texture2D(width, height);
+        
+        // Set all pixels to white
+        for (int x = 0; x < width; x++)
+        {
+            for (int y = 0; y < height; y++)
+            {
+                texture.SetPixel(x, y, Color.white);
+            }
+        }
+        
+        texture.Apply();
+        
+        // Create sprite from texture
+        return Sprite.Create(texture, new Rect(0, 0, width, height), new Vector2(0.5f, 0.5f));
+    }
+    
+    /// <summary>
+    /// Applies damage to the champion
+    /// </summary>
+    public void TakeDamage(float amount)
+    {
+        if (!isAlive)
+            return;
+            
+        currentHealth -= amount;
+        
+        // Check if champion is dead
+        if (currentHealth <= 0)
+        {
+            currentHealth = 0;
+            Die();
+        }
+        
+        if (showDebug)
+        {
+            Debug.Log($"Champion {championName} took {amount} damage. Current health: {currentHealth}/{maxHealth}");
+        }
+    }
+    
+    /// <summary>
+    /// Heals the champion
+    /// </summary>
+    public void Heal(float amount)
+    {
+        if (!isAlive)
+            return;
+            
+        currentHealth += amount;
+        
+        // Cap health at max
+        if (currentHealth > maxHealth)
+        {
+            currentHealth = maxHealth;
+        }
+        
+        if (showDebug)
+        {
+            Debug.Log($"Champion {championName} healed for {amount}. Current health: {currentHealth}/{maxHealth}");
+        }
+    }
+    
+    /// <summary>
+    /// Handles champion death
+    /// </summary>
+    private void Die()
+    {
+        isAlive = false;
+        
+        // Note: We're not stopping movement here anymore
+        // This allows other champions to continue moving after this champion dies
+        
+        // Fade out sprite
+        if (spriteRenderer != null)
+        {
+            Color fadeColor = spriteRenderer.color;
+            fadeColor.a = 0.5f;
+            spriteRenderer.color = fadeColor;
+        }
+        
+        if (showDebug)
+        {
+            Debug.Log($"Champion {championName} has died!");
+        }
+        
+        // Respawn after a delay (5 seconds)
+        Invoke("RespawnAtBase", 5f);
+    }
+    
+    /// <summary>
+    /// Respawns the champion at their team's base
+    /// </summary>
+    private void RespawnAtBase()
+    {
+        // Default spawn positions
+        Vector3 blueBasePosition = new Vector3(-45f, -45f, 0f);
+        Vector3 redBasePosition = new Vector3(45f, 45f, 0f);
+        
+        // Try to find spawn points by name first
+        GameObject blueSpawn = GameObject.Find("BlueSpawn");
+        GameObject redSpawn = GameObject.Find("RedSpawn");
+        
+        // Update default positions if spawn points were found
+        if (blueSpawn != null)
+        {
+            blueBasePosition = blueSpawn.transform.position;
+        }
+        
+        if (redSpawn != null)
+        {
+            redBasePosition = redSpawn.transform.position;
+        }
+        
+        // Reset position to team's base
+        if (team == Team.Blue)
+        {
+            transform.position = blueBasePosition;
+            
+            if (showDebug)
+            {
+                Debug.Log($"Champion {championName} respawning at Blue base: {blueBasePosition}");
+            }
+        }
+        else if (team == Team.Red)
+        {
+            transform.position = redBasePosition;
+            
+            if (showDebug)
+            {
+                Debug.Log($"Champion {championName} respawning at Red base: {redBasePosition}");
+            }
+        }
+        
+        // Revive with full health
+        Revive(1.0f);
+        
+        // Make sure the champion is assigned to a lane and moving
+        AssignToLane();
+        
+        if (showDebug)
+        {
+            Debug.Log($"Champion {championName} has respawned at base and is moving along lane {assignedLaneType}");
+        }
+    }
+    
+    /// <summary>
+    /// Revives the champion
+    /// </summary>
+    public void Revive(float healthPercent = 1f)
+    {
+        isAlive = true;
+        currentHealth = maxHealth * healthPercent;
+        
+        // Restore sprite
+        if (spriteRenderer != null)
+        {
+            Color restoreColor = spriteRenderer.color;
+            restoreColor.a = 1f;
+            spriteRenderer.color = restoreColor;
+        }
+        
+        // Resume movement
+        if (movementComponent != null)
+        {
+            movementComponent.ResumeMovement();
+        }
+        
+        if (showDebug)
+        {
+            Debug.Log($"Champion {championName} has been revived with {currentHealth}/{maxHealth} health!");
+        }
+    }
+    
+    /// <summary>
+    /// Ensures the champion has a collider for collision detection
+    /// </summary>
+    private void EnsureCollider()
+    {
+        // Check if the champion already has a collider
+        Collider2D collider = GetComponent<Collider2D>();
+        if (collider == null)
+        {
+            // Add a circle collider
+            CircleCollider2D circleCollider = gameObject.AddComponent<CircleCollider2D>();
+            circleCollider.radius = 1.0f;
+            circleCollider.isTrigger = true; // Use trigger for overlap detection without physics
+            
+            if (showDebug)
+            {
+                Debug.Log($"Added CircleCollider2D to champion {championName}");
+            }
+        }
+        else if (!collider.isTrigger)
+        {
+            // Make sure the collider is a trigger
+            collider.isTrigger = true;
+            
+            if (showDebug)
+            {
+                Debug.Log($"Set collider to trigger on champion {championName}");
+            }
+        }
+        
+        // Check if the champion has a Rigidbody2D component
+        Rigidbody2D rb = GetComponent<Rigidbody2D>();
+        if (rb == null)
+        {
+            // Add a Rigidbody2D component
+            rb = gameObject.AddComponent<Rigidbody2D>();
+            rb.isKinematic = true; // Set to kinematic to prevent physics from affecting movement
+            rb.gravityScale = 0f;  // Disable gravity
+            
+            if (showDebug)
+            {
+                Debug.Log($"Added Rigidbody2D to champion {championName}");
+            }
+        }
     }
 }
 

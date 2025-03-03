@@ -24,14 +24,24 @@ public class ChampionMovement : MonoBehaviour
     public bool moveForward = true;
     
     [Header("Interaction Settings")]
-    [Tooltip("Distance at which champions detect each other")]
-    public float championDetectionRange = 3f;
-    
     [Tooltip("Whether this champion is currently engaged with an opponent")]
     public bool isEngagedWithOpponent = false;
     
     [Tooltip("The current opponent this champion is engaged with")]
     public Champion currentOpponent;
+    
+    [Header("Combat Settings")]
+    [Tooltip("Whether to automatically attack when engaged")]
+    public bool autoAttack = true;
+    
+    [Tooltip("Base damage per attack")]
+    public float attackDamage = 10f;
+    
+    [Tooltip("Time between attacks in seconds")]
+    public float attackCooldown = 1.5f;
+    
+    [Tooltip("Visual effect prefab for attacks")]
+    public GameObject attackEffectPrefab;
     
     [Header("Debug")]
     [Tooltip("Whether to show debug information")]
@@ -48,6 +58,9 @@ public class ChampionMovement : MonoBehaviour
     
     // Layer mask for detecting champions
     private LayerMask championLayerMask;
+    
+    // Time until next attack
+    private float nextAttackTime = 0f;
     
     private void Awake()
     {
@@ -82,26 +95,17 @@ public class ChampionMovement : MonoBehaviour
                     currentWaypointIndex = 0;
                     if (showDebug)
                     {
-                        Debug.Log($"Blue champion {gameObject.name} starting at waypoint {currentWaypointIndex} (Blue base) in lane {assignedLane.laneName}, moving forward");
+                        Debug.Log($"Champion {championComponent.championName} starting at Blue base (index 0)");
                     }
                 }
                 else
                 {
                     // Red team starts at their base (last index)
-                    currentWaypointIndex = assignedLane.GetWaypointCount() - 1;
+                    currentWaypointIndex = assignedLane.waypoints.Count - 1;
                     if (showDebug)
                     {
-                        Debug.Log($"Red champion {gameObject.name} starting at waypoint {currentWaypointIndex} (Red base) in lane {assignedLane.laneName}, moving backward");
+                        Debug.Log($"Champion {championComponent.championName} starting at Red base (index {currentWaypointIndex})");
                     }
-                }
-            }
-            else
-            {
-                // Fallback to closest waypoint if no champion component
-                currentWaypointIndex = assignedLane.GetClosestWaypointIndex(transform.position);
-                if (showDebug)
-                {
-                    Debug.Log($"Champion {gameObject.name} starting at closest waypoint {currentWaypointIndex} in lane {assignedLane.laneName}");
                 }
             }
         }
@@ -109,124 +113,202 @@ public class ChampionMovement : MonoBehaviour
         {
             Debug.LogWarning($"Champion {gameObject.name} has no assigned lane!");
         }
+        
+        // Try to load attack effect prefab from Resources if none is assigned
+        if (attackEffectPrefab == null)
+        {
+            attackEffectPrefab = Resources.Load<GameObject>("Prefabs/AttackEffect");
+            
+            if (attackEffectPrefab != null && showDebug)
+            {
+                Debug.Log("Loaded attack effect prefab from Resources");
+            }
+        }
+    }
+    
+    /// <summary>
+    /// Attempts to find a lane for this champion
+    /// </summary>
+    private void FindLane()
+    {
+        // Try to get lane from champion component
+        if (championComponent != null && championComponent.assignedLaneType != LaneType.None)
+        {
+            // Find the LaneManager
+            LaneManager laneManager = FindObjectOfType<LaneManager>();
+            if (laneManager != null)
+            {
+                // Get the lane based on lane type
+                Lane lane = laneManager.GetLane(championComponent.assignedLaneType);
+                
+                if (lane != null)
+                {
+                    // Assign the lane
+                    AssignLane(lane, championComponent.team == Team.Blue);
+                    
+                    if (showDebug)
+                    {
+                        Debug.Log($"Found lane {lane.laneName} for champion {championComponent.championName}");
+                    }
+                    
+                    return;
+                }
+            }
+        }
+        
+        // If we couldn't find a specific lane, try to find any lane
+        Lane[] lanes = FindObjectsOfType<Lane>();
+        if (lanes.Length > 0)
+        {
+            // Assign the first lane
+            AssignLane(lanes[0], championComponent != null && championComponent.team == Team.Blue);
+            
+            if (showDebug)
+            {
+                Debug.Log($"Assigned champion to fallback lane {lanes[0].laneName}");
+            }
+        }
+        else
+        {
+            Debug.LogWarning("No lanes found in the scene!");
+        }
     }
     
     private void Update()
     {
+        // Don't do anything if no lane is assigned or we've reached the end of the lane
         if (assignedLane == null || reachedEndOfLane)
             return;
+            
+        // Don't do anything if the champion is dead
+        if (!championComponent.isAlive)
+            return;
         
-        // Check for opponent champions before moving
-        if (!isEngagedWithOpponent)
-        {
-            DetectOpponentChampions();
-        }
-        else
+        // Handle engagement logic if already engaged
+        if (isEngagedWithOpponent)
         {
             // If engaged with an opponent, face them
-            if (currentOpponent != null)
+            if (currentOpponent != null && currentOpponent.isAlive)
             {
                 FaceOpponent(currentOpponent.transform.position);
+                
+                // Auto attack if enabled
+                if (autoAttack && Time.time >= nextAttackTime)
+                {
+                    AttackOpponent();
+                }
             }
             else
             {
-                // If opponent is no longer valid, disengage
-                isEngagedWithOpponent = false;
-            }
-            
-            // Don't move while engaged
-            return;
-        }
-        
-        // Only move if not engaged with an opponent
-        if (!isEngagedWithOpponent)
-        {
-            MoveAlongLane();
-        }
-    }
-    
-    /// <summary>
-    /// Finds a lane to follow based on the champion's position
-    /// </summary>
-    private void FindLane()
-    {
-        // Find all lanes in the scene
-        Lane[] lanes = FindObjectsOfType<Lane>();
-        
-        if (lanes.Length == 0)
-        {
-            Debug.LogWarning("No lanes found in the scene!");
-            return;
-        }
-        
-        // Find the closest lane
-        float closestDistance = float.MaxValue;
-        Lane closestLane = null;
-        
-        foreach (Lane lane in lanes)
-        {
-            // Skip lanes that don't match our team
-            if (championComponent != null && lane.laneTeam != Team.Neutral && lane.laneTeam != championComponent.team)
-                continue;
+                // If opponent is no longer valid or is dead, disengage
+                DisengageFromOpponent();
                 
-            // Find the closest waypoint in this lane
-            int closestWaypointIndex = lane.GetClosestWaypointIndex(transform.position);
-            float distance = Vector3.Distance(transform.position, lane.GetWaypointPosition(closestWaypointIndex));
-            
-            if (distance < closestDistance)
-            {
-                closestDistance = distance;
-                closestLane = lane;
-            }
-        }
-        
-        if (closestLane != null)
-        {
-            assignedLane = closestLane;
-            Debug.Log($"Champion {gameObject.name} assigned to lane {assignedLane.laneName}");
-        }
-    }
-    
-    /// <summary>
-    /// Detects opponent champions in the same lane
-    /// </summary>
-    private void DetectOpponentChampions()
-    {
-        // Find all champions in detection range
-        Collider2D[] colliders = Physics2D.OverlapCircleAll(transform.position, championDetectionRange, championLayerMask);
-        
-        foreach (Collider2D collider in colliders)
-        {
-            // Skip self
-            if (collider.gameObject == gameObject)
-                continue;
+                // Resume movement immediately
+                MoveAlongLane();
                 
-            // Get the champion component
-            Champion otherChampion = collider.GetComponent<Champion>();
-            if (otherChampion == null)
-                continue;
-                
-            // Check if this is an opponent (different team)
-            if (otherChampion.team != championComponent.team)
-            {
-                // Check if they're in the same lane
-                ChampionMovement otherMovement = otherChampion.GetComponent<ChampionMovement>();
-                if (otherMovement != null && otherMovement.assignedLane == assignedLane)
+                if (showDebug)
                 {
-                    // Engage with this opponent
-                    EngageWithOpponent(otherChampion);
-                    
-                    // Also make the opponent engage with us
-                    otherMovement.EngageWithOpponent(championComponent);
-                    
-                    if (showDebug)
-                    {
-                        Debug.Log($"Champion {championComponent.championName} engaged with opponent {otherChampion.championName} in lane {assignedLane.laneName}");
-                    }
-                    
-                    break;
+                    Debug.Log($"Champion {championComponent.championName} disengaged from invalid opponent and resumed movement");
                 }
             }
+            
+            // Don't move while engaged with a valid opponent
+            return;
+        }
+        
+        // Move along the lane if not engaged with an opponent
+        MoveAlongLane();
+    }
+    
+    /// <summary>
+    /// Called when this champion collides with another object
+    /// </summary>
+    private void OnTriggerEnter2D(Collider2D other)
+    {
+        // Always log collision for debugging
+        Debug.Log($"Champion {championComponent.championName} collided with {other.gameObject.name}");
+        
+        // Skip if already engaged
+        if (isEngagedWithOpponent)
+        {
+            Debug.Log($"Champion {championComponent.championName} is already engaged with an opponent, ignoring collision with {other.gameObject.name}");
+            return;
+        }
+            
+        // Check if the other object is a champion
+        Champion otherChampion = other.GetComponent<Champion>();
+        if (otherChampion == null)
+        {
+            Debug.Log($"Object {other.gameObject.name} is not a champion, ignoring collision");
+            return;
+        }
+            
+        // Skip if it's on the same team
+        if (otherChampion.team == championComponent.team)
+        {
+            Debug.Log($"Champion {otherChampion.championName} is on the same team as {championComponent.championName}, ignoring collision");
+            return;
+        }
+            
+        // Check if they're in the same lane
+        ChampionMovement otherMovement = otherChampion.GetComponent<ChampionMovement>();
+        if (otherMovement != null && otherMovement.assignedLane == assignedLane)
+        {
+            // Engage with this opponent
+            EngageWithOpponent(otherChampion);
+            
+            // Also make the opponent engage with us
+            otherMovement.EngageWithOpponent(championComponent);
+            
+            Debug.Log($"Champion {championComponent.championName} collided with and engaged opponent {otherChampion.championName} in lane {assignedLane.laneName}");
+        }
+        else
+        {
+            Debug.Log($"Champion {otherChampion.championName} is not in the same lane as {championComponent.championName}, ignoring collision");
+        }
+    }
+    
+    /// <summary>
+    /// Called when this champion stops colliding with another object
+    /// </summary>
+    private void OnTriggerExit2D(Collider2D other)
+    {
+        // Always log collision exit for debugging
+        Debug.Log($"Champion {championComponent.championName} stopped colliding with {other.gameObject.name}");
+        
+        // Skip if not engaged
+        if (!isEngagedWithOpponent || currentOpponent == null)
+        {
+            Debug.Log($"Champion {championComponent.championName} is not engaged with an opponent, ignoring collision exit with {other.gameObject.name}");
+            return;
+        }
+            
+        // Check if the other object is our current opponent
+        Champion otherChampion = other.GetComponent<Champion>();
+        if (otherChampion == null || otherChampion != currentOpponent)
+        {
+            Debug.Log($"Object {other.gameObject.name} is not the current opponent of {championComponent.championName}, ignoring collision exit");
+            return;
+        }
+            
+        // If we're no longer colliding with our opponent and they're still alive,
+        // disengage and resume movement
+        if (otherChampion.isAlive)
+        {
+            DisengageFromOpponent();
+            
+            // Also make the opponent disengage from us
+            ChampionMovement otherMovement = otherChampion.GetComponent<ChampionMovement>();
+            if (otherMovement != null && otherMovement.currentOpponent == championComponent)
+            {
+                otherMovement.DisengageFromOpponent();
+            }
+            
+            Debug.Log($"Champion {championComponent.championName} stopped colliding with opponent {otherChampion.championName} and disengaged");
+        }
+        else
+        {
+            Debug.Log($"Champion {championComponent.championName} stopped colliding with opponent {otherChampion.championName} but opponent is dead, not disengaging");
         }
     }
     
@@ -247,12 +329,30 @@ public class ChampionMovement : MonoBehaviour
     /// </summary>
     public void DisengageFromOpponent()
     {
+        // Store reference to opponent for logging
+        Champion previousOpponent = currentOpponent;
+        
+        // Clear engagement state
         isEngagedWithOpponent = false;
         currentOpponent = null;
         
-        if (showDebug)
+        // Only resume movement if the champion is alive
+        if (championComponent.isAlive)
         {
-            Debug.Log($"Champion {championComponent.championName} disengaged from opponent");
+            // Resume movement
+            ResumeMovement();
+            
+            if (showDebug && previousOpponent != null)
+            {
+                Debug.Log($"Champion {championComponent.championName} disengaged from opponent {previousOpponent.championName} and resumed movement");
+            }
+        }
+        else
+        {
+            if (showDebug && previousOpponent != null)
+            {
+                Debug.Log($"Champion {championComponent.championName} disengaged from opponent {previousOpponent.championName} but is dead, not resuming movement");
+            }
         }
     }
     
@@ -410,10 +510,160 @@ public class ChampionMovement : MonoBehaviour
         reachedEndOfLane = false;
     }
     
+    /// <summary>
+    /// Attacks the current opponent
+    /// </summary>
+    private void AttackOpponent()
+    {
+        if (currentOpponent == null || !currentOpponent.isAlive)
+        {
+            // If opponent is null or already dead, disengage and resume movement
+            DisengageFromOpponent();
+            return;
+        }
+            
+        // Set next attack time
+        nextAttackTime = Time.time + attackCooldown;
+        
+        // Apply damage to opponent
+        currentOpponent.TakeDamage(attackDamage);
+        
+        // Show attack effect
+        ShowAttackEffect();
+        
+        if (showDebug)
+        {
+            Debug.Log($"Champion {championComponent.championName} attacked {currentOpponent.championName} for {attackDamage} damage");
+        }
+        
+        // Check if opponent died
+        if (!currentOpponent.isAlive)
+        {
+            Debug.Log($"Champion {championComponent.championName} defeated {currentOpponent.championName} and is disengaging");
+            
+            // Disengage from dead opponent
+            DisengageFromOpponent();
+            
+            // Force resume movement
+            ResumeMovement();
+            
+            if (showDebug)
+            {
+                Debug.Log($"Champion {championComponent.championName} defeated {currentOpponent.championName} and resumed movement");
+            }
+        }
+    }
+    
+    /// <summary>
+    /// Shows a visual effect for attacks
+    /// </summary>
+    private void ShowAttackEffect()
+    {
+        if (currentOpponent == null)
+            return;
+            
+        // Create a simple effect if no prefab is assigned
+        if (attackEffectPrefab == null)
+        {
+            // Create a simple circle for the attack effect
+            GameObject effectObj = new GameObject("AttackEffect");
+            effectObj.transform.position = transform.position;
+            
+            // Add sprite renderer
+            SpriteRenderer renderer = effectObj.AddComponent<SpriteRenderer>();
+            renderer.sprite = CreateCircleSprite(16, Color.yellow);
+            renderer.sortingOrder = 5;
+            
+            // Add attack effect component
+            AttackEffect effect = effectObj.AddComponent<AttackEffect>();
+            effect.targetPosition = currentOpponent.transform.position;
+            effect.duration = 0.3f;
+            effect.effectColor = Color.yellow;
+            
+            // Set team color if champion component exists
+            if (championComponent != null)
+            {
+                effect.SetColor(championComponent.teamColor);
+            }
+            
+            // Set scale
+            effectObj.transform.localScale = new Vector3(0.3f, 0.3f, 0.3f);
+        }
+        else
+        {
+            // Instantiate attack effect from prefab
+            GameObject effectObj = Instantiate(attackEffectPrefab, transform.position, Quaternion.identity);
+            
+            // Set up the effect
+            AttackEffect effect = effectObj.GetComponent<AttackEffect>();
+            if (effect != null)
+            {
+                effect.SetTarget(currentOpponent.transform.position);
+                
+                // Set team color if champion component exists
+                if (championComponent != null)
+                {
+                    effect.SetColor(championComponent.teamColor);
+                }
+            }
+            else
+            {
+                // If the prefab doesn't have the AttackEffect component, add it
+                effect = effectObj.AddComponent<AttackEffect>();
+                effect.SetTarget(currentOpponent.transform.position);
+                
+                // Set team color if champion component exists
+                if (championComponent != null)
+                {
+                    effect.SetColor(championComponent.teamColor);
+                }
+                
+                Debug.LogWarning("Attack effect prefab doesn't have AttackEffect component. Adding one automatically.");
+            }
+        }
+        
+        if (showDebug)
+        {
+            Debug.Log($"Champion {championComponent.championName} attacked {currentOpponent.championName}");
+        }
+    }
+    
+    /// <summary>
+    /// Creates a simple circle sprite for the attack effect
+    /// </summary>
+    private Sprite CreateCircleSprite(int resolution, Color color)
+    {
+        // Create a simple circle texture
+        Texture2D texture = new Texture2D(resolution, resolution);
+        
+        // Set pixels to create a circle
+        float radius = resolution / 2f;
+        for (int x = 0; x < resolution; x++)
+        {
+            for (int y = 0; y < resolution; y++)
+            {
+                float distance = Vector2.Distance(new Vector2(x, y), new Vector2(radius, radius));
+                if (distance < radius)
+                {
+                    texture.SetPixel(x, y, color);
+                }
+                else
+                {
+                    texture.SetPixel(x, y, Color.clear);
+                }
+            }
+        }
+        
+        texture.Apply();
+        
+        // Create sprite from texture
+        return Sprite.Create(texture, new Rect(0, 0, resolution, resolution), new Vector2(0.5f, 0.5f));
+    }
+    
     private void OnDrawGizmosSelected()
     {
         // Draw detection range
         Gizmos.color = Color.yellow;
-        Gizmos.DrawWireSphere(transform.position, championDetectionRange);
+        Gizmos.DrawWireSphere(transform.position, 3f);
     }
 } 
