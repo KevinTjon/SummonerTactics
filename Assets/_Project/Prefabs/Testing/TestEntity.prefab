@@ -12,6 +12,8 @@ GameObject:
   - component: {fileID: 8713576551304785756}
   - component: {fileID: 2909722376740110179}
   - component: {fileID: 5356542693980081706}
+  - component: {fileID: 8534743507066875595}
+  - component: {fileID: 7866743391047269567}
   m_Layer: 0
   m_Name: TestEntity
   m_TagString: Untagged
@@ -133,7 +135,45 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f0ab7f692565e804faf66e3908c5be2b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  spriteRenderer: {fileID: 0}
   entityColor: {r: 0, g: 1, b: 1, a: 1}
-  moveRandomly: 1
-  moveSpeed: 2
-  maxMoveDistance: 5
+  champion: {fileID: 8534743507066875595}
+  movement: {fileID: 7866743391047269567}
+  startMovingAutomatically: 1
+  laneType: 2
+  team: 0
+--- !u!114 &8534743507066875595
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 382617277477844352}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d8e4a23ae73697141a8fbfededda5c61, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  championName: Default Champion
+  team: 0
+  assignedLaneType: 1
+  teamColor: {r: 0, g: 0, b: 1, a: 1}
+  spriteRenderer: {fileID: 0}
+--- !u!114 &7866743391047269567
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 382617277477844352}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5e4f9cad921667444a2fa15b6a90b197, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  moveSpeed: 5
+  waypointReachedThreshold: 0.5
+  loopWaypoints: 0
+  assignedLane: {fileID: 0}
+  moveForward: 1
+  showDebug: 1

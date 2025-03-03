@@ -1,115 +1,197 @@
 using UnityEngine;
 
 /// <summary>
-/// A simple test entity for testing spawning and movement in the test scene.
+/// A simple test entity for testing champion movement and lane functionality.
 /// </summary>
 public class TestEntity : MonoBehaviour
 {
-    [Header("Visual Settings")]
-    [Tooltip("Color of the entity")]
+    [Header("Visuals")]
+    [Tooltip("Sprite renderer for the entity")]
+    public SpriteRenderer spriteRenderer;
+    
+    [Tooltip("Color for the entity")]
     public Color entityColor = Color.white;
     
-    [Header("Movement Settings")]
-    [Tooltip("Whether the entity should move randomly")]
-    public bool moveRandomly = false;
+    [Header("Components")]
+    [Tooltip("Reference to the Champion component")]
+    public Champion champion;
     
-    [Tooltip("Movement speed")]
-    public float moveSpeed = 2f;
+    [Tooltip("Reference to the ChampionMovement component")]
+    public ChampionMovement movement;
     
-    [Tooltip("Maximum distance to move from spawn point")]
-    public float maxMoveDistance = 5f;
+    [Header("Test Settings")]
+    [Tooltip("Whether to start moving automatically")]
+    public bool startMovingAutomatically = true;
     
-    private Vector3 spawnPosition;
-    private Vector3 targetPosition;
-    private SpriteRenderer spriteRenderer;
+    [Tooltip("Lane type to assign to (only used if no lane is already assigned)")]
+    public LaneType laneType = LaneType.Bottom;
+    
+    [Tooltip("Team to assign to (only used if no team is already assigned)")]
+    public Team team = Team.Blue;
+    
+    [Tooltip("Whether to respect existing lane and team assignments")]
+    public bool respectExistingAssignments = true;
+    
+    [Header("Debug Settings")]
+    [Tooltip("Whether to show debug information")]
+    public bool showDebug = true;
     
     private void Awake()
     {
-        spriteRenderer = GetComponent<SpriteRenderer>();
+        // Get or add required components
         if (spriteRenderer == null)
         {
-            spriteRenderer = gameObject.AddComponent<SpriteRenderer>();
-            spriteRenderer.sprite = GetDefaultSprite();
+            spriteRenderer = GetComponent<SpriteRenderer>();
+            if (spriteRenderer == null)
+            {
+                spriteRenderer = gameObject.AddComponent<SpriteRenderer>();
+            }
         }
         
-        // Set the entity color
-        spriteRenderer.color = entityColor;
-        
-        // Try to tag the entity, but handle the case where the tag doesn't exist
-        try
+        if (champion == null)
         {
-            gameObject.tag = "TestEntity";
+            champion = GetComponent<Champion>();
+            if (champion == null)
+            {
+                champion = gameObject.AddComponent<Champion>();
+            }
         }
-        catch (UnityException)
+        
+        if (movement == null)
         {
-            Debug.LogWarning("The 'TestEntity' tag does not exist. Please add it in the Unity Editor under Edit > Project Settings > Tags and Layers.");
+            movement = GetComponent<ChampionMovement>();
+            if (movement == null)
+            {
+                movement = gameObject.AddComponent<ChampionMovement>();
+            }
         }
     }
     
     private void Start()
     {
-        // Store the initial spawn position
-        spawnPosition = transform.position;
+        // Set up the entity
+        SetupEntity();
         
-        // Set initial target position
-        SetNewTargetPosition();
+        // Start moving if enabled
+        if (startMovingAutomatically)
+        {
+            StartMoving();
+        }
     }
     
-    private void Update()
+    /// <summary>
+    /// Sets up the entity with the specified team and lane
+    /// </summary>
+    private void SetupEntity()
     {
-        if (moveRandomly)
+        // Set sprite color
+        if (spriteRenderer != null)
         {
-            // Move towards target position
-            transform.position = Vector3.MoveTowards(transform.position, targetPosition, moveSpeed * Time.deltaTime);
-            
-            // If reached target, set a new target
-            if (Vector3.Distance(transform.position, targetPosition) < 0.1f)
+            spriteRenderer.color = entityColor;
+        }
+        
+        // Set team and lane only if not already set or if we're not respecting existing assignments
+        if (champion != null)
+        {
+            if (showDebug)
             {
-                SetNewTargetPosition();
+                Debug.Log($"TestEntity {gameObject.name} - Current team: {champion.team}, Lane type: {champion.assignedLaneType}");
+            }
+            
+            // Only set team if not already set or if we're not respecting existing assignments
+            if (!respectExistingAssignments || champion.team == Team.Neutral)
+            {
+                if (showDebug)
+                {
+                    Debug.Log($"TestEntity {gameObject.name} - Setting team to {team}");
+                }
+                champion.SetTeam(team);
+            }
+            
+            // Only set lane type if not already set or if we're not respecting existing assignments
+            if (!respectExistingAssignments || champion.assignedLaneType == LaneType.None)
+            {
+                if (showDebug)
+                {
+                    Debug.Log($"TestEntity {gameObject.name} - Setting lane type to {laneType}");
+                }
+                champion.SetLaneType(laneType);
+            }
+            else
+            {
+                // Ensure the champion's lane assignment is properly initialized
+                if (showDebug)
+                {
+                    Debug.Log($"TestEntity {gameObject.name} - Respecting existing lane assignment: {champion.assignedLaneType}");
+                }
+                champion.AssignToLane();
             }
         }
     }
     
     /// <summary>
-    /// Sets a new random target position within the max move distance
+    /// Starts the entity moving along its assigned lane
     /// </summary>
-    private void SetNewTargetPosition()
+    public void StartMoving()
     {
-        // Get a random direction
-        Vector2 randomDirection = Random.insideUnitCircle.normalized;
-        
-        // Calculate random distance (between 1 and maxMoveDistance)
-        float randomDistance = Random.Range(1f, maxMoveDistance);
-        
-        // Set new target position
-        targetPosition = spawnPosition + new Vector3(randomDirection.x, randomDirection.y, 0) * randomDistance;
-    }
-    
-    /// <summary>
-    /// Gets a default sprite if none is assigned
-    /// </summary>
-    private Sprite GetDefaultSprite()
-    {
-        // Try to use the built-in square sprite
-        return Resources.Load<Sprite>("Sprites/Square") ?? CreateDefaultSprite();
-    }
-    
-    /// <summary>
-    /// Creates a default sprite if none can be loaded
-    /// </summary>
-    private Sprite CreateDefaultSprite()
-    {
-        // Create a simple 32x32 texture
-        Texture2D texture = new Texture2D(32, 32);
-        Color[] colors = new Color[32 * 32];
-        for (int i = 0; i < colors.Length; i++)
+        if (movement != null)
         {
-            colors[i] = Color.white;
+            // Ensure the champion has a lane assigned
+            if (movement.assignedLane == null)
+            {
+                Debug.LogWarning($"Test entity {gameObject.name} has no lane assigned. Trying to assign now...");
+                
+                // Try to assign a lane based on the champion's lane type
+                if (champion != null)
+                {
+                    LaneManager laneManager = FindObjectOfType<LaneManager>();
+                    if (laneManager != null)
+                    {
+                        Lane lane = laneManager.GetLane(champion.assignedLaneType);
+                        if (lane != null)
+                        {
+                            movement.AssignLane(lane, champion.team != Team.Red);
+                            Debug.Log($"Assigned {gameObject.name} to {lane.laneName} based on lane type {champion.assignedLaneType}");
+                        }
+                        else
+                        {
+                            Debug.LogWarning($"Could not find lane of type {champion.assignedLaneType} for team {champion.team}");
+                        }
+                    }
+                }
+                
+                // If still no lane, try to find any lane
+                if (movement.assignedLane == null)
+                {
+                    Lane[] lanes = FindObjectsOfType<Lane>();
+                    if (lanes.Length > 0)
+                    {
+                        movement.AssignLane(lanes[0], champion.team != Team.Red);
+                        Debug.Log($"Assigned {gameObject.name} to first available lane: {movement.assignedLane.laneName}");
+                    }
+                    else
+                    {
+                        Debug.LogError("No lanes found in the scene. Cannot start moving.");
+                        return;
+                    }
+                }
+            }
+            
+            // Start moving
+            movement.enabled = true;
+            Debug.Log($"Test entity {gameObject.name} started moving along {movement.assignedLane.laneName}");
         }
-        texture.SetPixels(colors);
-        texture.Apply();
-        
-        // Create a sprite from the texture
-        return Sprite.Create(texture, new Rect(0, 0, 32, 32), new Vector2(0.5f, 0.5f));
+    }
+    
+    /// <summary>
+    /// Stops the entity from moving
+    /// </summary>
+    public void StopMoving()
+    {
+        if (movement != null)
+        {
+            movement.enabled = false;
+            Debug.Log($"Test entity {gameObject.name} stopped moving");
+        }
     }
 } 

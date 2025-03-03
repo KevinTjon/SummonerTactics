@@ -62,11 +62,11 @@ public class TestSceneManager : MonoBehaviour
             
             // Add buttons for testing
             GUILayout.Space(10);
-            if (GUILayout.Button("Spawn Test Entities"))
+            if (GUILayout.Button("Spawn Champions"))
             {
                 if (sceneSetup != null)
                 {
-                    sceneSetup.SpawnTestEntities();
+                    sceneSetup.SpawnAllChampions();
                 }
             }
             

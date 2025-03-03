@@ -22,9 +22,9 @@ public class TestSceneSetupEditor : Editor
         // Add buttons for testing
         EditorGUILayout.BeginHorizontal();
         
-        if (GUILayout.Button("Spawn Test Entities"))
+        if (GUILayout.Button("Spawn Champions"))
         {
-            testSceneSetup.SpawnTestEntities();
+            testSceneSetup.SpawnAllChampions();
         }
         
         if (GUILayout.Button("Clear Test Entities"))
@@ -90,7 +90,17 @@ public class TestSceneSetupEditor : Editor
         // Add the test entity script
         TestEntity testEntityScript = testEntity.AddComponent<TestEntity>();
         testEntityScript.entityColor = Color.cyan;
-        testEntityScript.moveRandomly = true;
+        
+        // Add Champion component
+        Champion champion = testEntity.AddComponent<Champion>();
+        champion.championName = "Test Champion";
+        champion.team = Team.Blue;
+        
+        // Add ChampionMovement component
+        ChampionMovement movement = testEntity.AddComponent<ChampionMovement>();
+        movement.moveSpeed = 5f;
+        movement.waypointReachedThreshold = 0.1f;
+        movement.loopWaypoints = true;
         
         // Create the prefab
         #if UNITY_2018_3_OR_NEWER
@@ -169,6 +179,43 @@ public class TestSceneSetupEditor : Editor
         
         // Create the TestEntity tag if it doesn't exist
         CreateTestEntityTag();
+        
+        // Create or find LaneManager
+        string laneManagerPrefabPath = "Assets/_Project/Prefabs/Map/LaneManager.prefab";
+        GameObject laneManagerPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(laneManagerPrefabPath);
+        
+        if (laneManagerPrefab == null)
+        {
+            // Create a new LaneManager GameObject
+            GameObject laneManagerObj = new GameObject("LaneManager");
+            laneManagerObj.AddComponent<LaneManager>();
+            
+            // Create the prefab directory if it doesn't exist
+            string directory = System.IO.Path.GetDirectoryName(laneManagerPrefabPath);
+            if (!System.IO.Directory.Exists(directory))
+            {
+                System.IO.Directory.CreateDirectory(directory);
+                AssetDatabase.Refresh();
+            }
+            
+            // Create the prefab
+            #if UNITY_2018_3_OR_NEWER
+            laneManagerPrefab = PrefabUtility.SaveAsPrefabAsset(laneManagerObj, laneManagerPrefabPath);
+            #else
+            laneManagerPrefab = PrefabUtility.CreatePrefab(laneManagerPrefabPath, laneManagerObj);
+            #endif
+            
+            // Destroy the temporary game object
+            DestroyImmediate(laneManagerObj);
+            
+            Debug.Log("Created LaneManager prefab at: " + laneManagerPrefabPath);
+        }
+        
+        if (laneManagerPrefab != null)
+        {
+            testSceneSetup.laneManagerPrefab = laneManagerPrefab;
+            Debug.Log("Assigned LaneManager prefab to TestSceneSetup");
+        }
         
         Debug.Log("Test scene setup complete!");
     }
