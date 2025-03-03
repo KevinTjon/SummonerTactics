@@ -582,6 +582,28 @@ public class Champion : MonoBehaviour
             }
         }
         
+        // Make sure any engagement state is cleared
+        if (movementComponent != null)
+        {
+            // Force disengage from any opponents
+            movementComponent.DisengageFromOpponent();
+            
+            // Reset the waypoint index explicitly
+            if (movementComponent.assignedLane != null)
+            {
+                bool moveForward = (team == Team.Blue);
+                int startIndex = moveForward ? 0 : movementComponent.assignedLane.GetWaypointCount() - 1;
+                
+                // Set the waypoint index directly
+                movementComponent.ResetWaypointIndex(startIndex);
+                
+                if (showDebug)
+                {
+                    Debug.Log($"Reset waypoint index for {championName} to {startIndex}");
+                }
+            }
+        }
+        
         // Revive with full health
         Revive(1.0f);
         

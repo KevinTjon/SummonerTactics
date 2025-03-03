@@ -337,7 +337,7 @@ public class ChampionMovement : MonoBehaviour
         currentOpponent = null;
         
         // Only resume movement if the champion is alive
-        if (championComponent.isAlive)
+        if (championComponent != null && championComponent.isAlive)
         {
             // Resume movement
             ResumeMovement();
@@ -347,12 +347,9 @@ public class ChampionMovement : MonoBehaviour
                 Debug.Log($"Champion {championComponent.championName} disengaged from opponent {previousOpponent.championName} and resumed movement");
             }
         }
-        else
+        else if (showDebug && previousOpponent != null)
         {
-            if (showDebug && previousOpponent != null)
-            {
-                Debug.Log($"Champion {championComponent.championName} disengaged from opponent {previousOpponent.championName} but is dead, not resuming movement");
-            }
+            Debug.Log($"Champion {championComponent.championName} disengaged from opponent {previousOpponent.championName} but is dead, not resuming movement");
         }
     }
     
@@ -665,5 +662,29 @@ public class ChampionMovement : MonoBehaviour
         // Draw detection range
         Gizmos.color = Color.yellow;
         Gizmos.DrawWireSphere(transform.position, 3f);
+    }
+    
+    /// <summary>
+    /// Explicitly resets the waypoint index
+    /// </summary>
+    public void ResetWaypointIndex(int newIndex)
+    {
+        if (assignedLane != null)
+        {
+            // Ensure the index is within valid range
+            int waypointCount = assignedLane.GetWaypointCount();
+            if (waypointCount > 0)
+            {
+                currentWaypointIndex = Mathf.Clamp(newIndex, 0, waypointCount - 1);
+                
+                // Also reset the reached end of lane flag
+                reachedEndOfLane = false;
+                
+                if (showDebug)
+                {
+                    Debug.Log($"Champion {championComponent.championName} waypoint index reset to {currentWaypointIndex}");
+                }
+            }
+        }
     }
 } 
