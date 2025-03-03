@@ -286,7 +286,7 @@ public class CameraController : MonoBehaviour
         }
     }
     
-    private void ResetCamera()
+    public void ResetCamera()
     {
         PositionCameraAboveMap();
     }
